@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LinkedIn Profile API</title>
+<style>
+  :root{--bg:#0b1220;--card:#141c2e;--soft:#0f1728;--line:#26324a;--txt:#e6ecf5;--muted:#93a1bd;--accent:#3b82f6;--err:#ef4444;--ok:#22c55e;}
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:system-ui,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--txt);}
+  .wrap{max-width:880px;margin:0 auto;padding:24px 16px 80px;}
+  h1{font-size:20px;margin:0 0 4px;} .sub{color:var(--muted);font-size:13px;margin-bottom:18px;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:16px;}
+  .row{display:flex;gap:8px;} .between{justify-content:space-between;align-items:center;}
+  input,textarea{width:100%;background:var(--soft);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:10px 12px;font-size:14px;font-family:inherit;}
+  textarea{resize:vertical;min-height:60px;}
+  button{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:10px 16px;font-size:14px;cursor:pointer;white-space:nowrap;}
+  button:disabled{opacity:.6;cursor:not-allowed;}
+  button.ghost{background:transparent;color:var(--muted);border:1px solid var(--line);}
+  label{display:block;font-size:12px;color:var(--muted);margin:10px 0 4px;}
+  .banner{border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:12px;display:none;}
+  .banner.err{background:rgba(239,68,68,.12);border:1px solid var(--err);color:#fca5a5;}
+  .banner.ok{background:rgba(34,197,94,.12);border:1px solid var(--ok);color:#86efac;}
+  pre{background:var(--soft);border:1px solid var(--line);border-radius:8px;padding:14px;overflow:auto;font-size:12.5px;line-height:1.5;max-height:560px;}
+  .muted{color:var(--muted);font-size:12px;} .hidden{display:none;}
+  .spinner{width:18px;height:18px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;display:inline-block;animation:spin .7s linear infinite;vertical-align:middle;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  /* profile */
+  .phead{display:flex;gap:16px;align-items:center;}
+  .avatar{width:76px;height:76px;border-radius:50%;object-fit:cover;background:var(--soft);border:1px solid var(--line);flex:0 0 auto;}
+  .pname{font-size:19px;font-weight:700;}
+  .pmeta{color:var(--muted);font-size:13px;margin-top:2px;}
+  .sec-title{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0 0 10px;}
+  .item{display:flex;gap:12px;padding:10px 0;border-top:1px solid var(--line);}
+  .item:first-of-type{border-top:0;}
+  .logo{width:40px;height:40px;border-radius:8px;object-fit:contain;background:var(--soft);border:1px solid var(--line);flex:0 0 auto;}
+  .t-strong{font-weight:600;} .t-dim{color:var(--muted);font-size:13px;}
+  .desc{color:#cdd6e6;font-size:13px;margin-top:4px;white-space:pre-line;}
+  .role{padding:6px 0 6px 14px;border-left:2px solid var(--line);margin:6px 0 0 2px;}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;}
+  .chip{background:var(--soft);border:1px solid var(--line);border-radius:999px;padding:5px 11px;font-size:12.5px;}
+  a{color:#7db1ff;}
+  .tabs{display:flex;gap:8px;margin-bottom:10px;}
+  .tab{font-size:13px;padding:6px 12px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer;}
+  .tab.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>LinkedIn Profile API</h1>
+  <div class="sub">Paste a LinkedIn profile URL and get structured, interactive data.</div>
+
+  <div id="banner" class="banner"></div>
+
+  <div class="card">
+    <div class="row">
+      <input id="url" placeholder="https://www.linkedin.com/in/<slug>/" />
+      <button id="go">Fetch</button>
+    </div>
+    <div style="margin-top:10px"><button id="toggleSettings" class="ghost">⚙ Settings (tokens)</button></div>
+    <div id="settings" class="hidden" style="margin-top:12px;border-top:1px solid var(--line);padding-top:12px">
+      <div class="muted">Stored only in your browser, sent per request. Update when the session expires.</div>
+      <label>li_at</label><textarea id="liat" placeholder="AQED..."></textarea>
+      <label>JSESSIONID</label><input id="jsess" placeholder="ajax:1234567890" />
+      <label>API key (optional)</label><input id="apikey" placeholder="leave blank if not required" />
+      <div style="margin-top:10px"><button id="save">Save tokens</button></div>
+    </div>
+  </div>
+
+  <div id="loading" class="card hidden"><span class="spinner"></span> &nbsp;Fetching profile…</div>
+
+  <div id="resultCard" class="card hidden">
+    <div class="row between" style="margin-bottom:12px">
+      <div class="tabs">
+        <button class="tab active" id="tabCard" data-view="card">Profile</button>
+        <button class="tab" id="tabJson" data-view="json">Raw JSON</button>
+      </div>
+      <div class="row">
+        <span class="muted" id="status" style="align-self:center"></span>
+        <button id="export" class="ghost">⬇ Export JSON</button>
+      </div>
+    </div>
+    <div id="cardView"></div>
+    <pre id="jsonView" class="hidden"></pre>
+  </div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const LS={liat:'li_at',jsess:'jsessionid',apikey:'apikey'};
+let current=null;
+
+$('liat').value=localStorage.getItem(LS.liat)||'';
+$('jsess').value=localStorage.getItem(LS.jsess)||'';
+$('apikey').value=localStorage.getItem(LS.apikey)||'';
+
+$('toggleSettings').onclick=()=>$('settings').classList.toggle('hidden');
+$('save').onclick=()=>{
+  localStorage.setItem(LS.liat,$('liat').value.trim());
+  localStorage.setItem(LS.jsess,$('jsess').value.trim());
+  localStorage.setItem(LS.apikey,$('apikey').value.trim());
+  banner('Tokens saved.','ok');
+};
+function banner(msg,type){const b=$('banner');b.textContent=msg;b.className='banner '+type;b.style.display='block';}
+function hideBanner(){$('banner').style.display='none';}
+
+const esc=s=>(s==null?'':String(s)).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const line=(...p)=>p.filter(Boolean).join(' · ');
+
+function section(title,inner){ if(!inner) return ''; return `<div style="margin-top:16px"><div class="sec-title">${title}</div>${inner}</div>`; }
+function chips(arr){ if(!arr||!arr.length) return ''; return `<div class="chips">${arr.map(s=>`<span class="chip">${esc(s)}</span>`).join('')}</div>`; }
+
+function renderExperience(exp){
+  if(!exp||!exp.length) return '';
+  return exp.map(e=>{
+    const logo=e.companyLogoUrl?`<img class="logo" src="${esc(e.companyLogoUrl)}" onerror="this.style.visibility='hidden'">`:`<div class="logo"></div>`;
+    const positions=(e.positions||[]).map(p=>`
+      <div class="role">
+        <div class="t-strong">${esc(p.title)}</div>
+        <div class="t-dim">${esc(line(p.dateRange,p.duration,p.location))}</div>
+        ${p.description?`<div class="desc">${esc(p.description)}</div>`:''}
+      </div>`).join('');
+    return `<div class="item">${logo}<div style="flex:1">
+        <div class="t-strong">${esc(e.company||'—')} ${e.companyUrl?`<a href="${esc(e.companyUrl)}" target="_blank">↗</a>`:''}</div>
+        ${e.totalDuration?`<div class="t-dim">${esc(e.totalDuration)}</div>`:''}
+        ${positions}
+      </div></div>`;
+  }).join('');
+}
+function renderEducation(edu){
+  if(!edu||!edu.length) return '';
+  return edu.map(e=>{
+    const logo=e.logoUrl?`<img class="logo" src="${esc(e.logoUrl)}" onerror="this.style.visibility='hidden'">`:`<div class="logo"></div>`;
+    return `<div class="item">${logo}<div style="flex:1">
+      <div class="t-strong">${esc(e.school||'—')}</div>
+      <div class="t-dim">${esc(line(e.degree,e.dateRange))}</div></div></div>`;
+  }).join('');
+}
+function renderHonors(h){
+  if(!h||!h.length) return '';
+  return h.map(x=>`<div class="item"><div style="flex:1">
+    <div class="t-strong">${esc(x.name)}</div>
+    <div class="t-dim">${esc(line(x.issuer,x.date))}</div></div></div>`).join('');
+}
+function renderProjects(p){
+  if(!p||!p.length) return '';
+  return p.map(x=>`<div class="item"><div style="flex:1">
+    <div class="t-strong">${esc(x.name)}</div>
+    ${x.detail?`<div class="desc">${esc(x.detail)}</div>`:''}</div></div>`).join('');
+}
+function renderContact(c){
+  if(!c||!c.length) return '';
+  return c.map(x=>`<div class="item"><div style="flex:1">
+    <div class="t-dim">${esc(x.type)}</div>
+    <div>${/^https?:/.test(x.value||'')?`<a href="${esc(x.value)}" target="_blank">${esc(x.value)}</a>`:esc(x.value)}</div></div></div>`).join('');
+}
+
+function renderProfile(d){
+  const avatar=d.profileImageUrl?`<img class="avatar" src="${esc(d.profileImageUrl)}" onerror="this.style.visibility='hidden'">`:`<div class="avatar"></div>`;
+  $('cardView').innerHTML=`
+    <div class="phead">
+      ${avatar}
+      <div>
+        <div class="pname">${esc(d.name||'—')}</div>
+        ${d.headline?`<div class="pmeta">${esc(d.headline)}</div>`:''}
+        <div class="pmeta">${esc(line(d.location,d.connections))}</div>
+      </div>
+    </div>
+    ${section('About', d.about?`<div class="desc">${esc(d.about)}</div>`:'')}
+    ${section('Experience', renderExperience(d.experience))}
+    ${section('Education', renderEducation(d.education))}
+    ${section('Skills', chips(d.skills))}
+    ${section('Projects', renderProjects(d.projects))}
+    ${section('Courses', chips(d.courses))}
+    ${section('Honors & Awards', renderHonors(d.honors))}
+    ${section('Languages', chips(d.languages))}
+    ${section('Contact', renderContact(d.contact))}
+  `;
+  $('jsonView').textContent=JSON.stringify(d,null,2);
+}
+
+// tabs
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active');
+  const json=t.dataset.view==='json';
+  $('jsonView').classList.toggle('hidden',!json);
+  $('cardView').classList.toggle('hidden',json);
+});
+
+$('export').onclick=()=>{
+  if(!current) return;
+  const blob=new Blob([JSON.stringify(current,null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=(current.vanityName||'profile')+'.json';
+  a.click(); URL.revokeObjectURL(a.href);
+};
+
+async function fetchProfile(){
+  const url=$('url').value.trim();
+  hideBanner();
+  if(!url) return banner('Enter a LinkedIn profile URL.','err');
+  const headers={};
+  const liat=localStorage.getItem(LS.liat),jsess=localStorage.getItem(LS.jsess),key=localStorage.getItem(LS.apikey);
+  if(liat&&jsess){headers['x-li-at']=liat;headers['x-jsessionid']=jsess;}
+  if(key)headers['x-api-key']=key;
+
+  $('go').disabled=true;
+  $('resultCard').classList.add('hidden');
+  $('loading').classList.remove('hidden');
+  try{
+    const res=await fetch('/api/v1/profile?url='+encodeURIComponent(url),{headers});
+    const data=await res.json();
+    $('loading').classList.add('hidden');
+    $('status').textContent='HTTP '+res.status;
+    if(res.ok){
+      current=data; renderProfile(data);
+      $('resultCard').classList.remove('hidden');
+      banner('Profile fetched successfully.','ok');
+    } else if(res.status===502){
+      banner('Session expired or blocked. Open Settings and paste a fresh li_at token.','err');
+      $('settings').classList.remove('hidden');
+    } else {
+      banner(data.detail||('Request failed (HTTP '+res.status+').'),'err');
+    }
+  }catch(e){
+    $('loading').classList.add('hidden');
+    banner('Network error: '+e.message,'err');
+  }finally{
+    $('go').disabled=false;
+  }
+}
+$('go').onclick=fetchProfile;
+$('url').addEventListener('keydown',e=>{if(e.key==='Enter')fetchProfile();});
+</script>
+</body>
+</html>
