@@ -473,3 +473,14 @@ for bulk harvesting or any purpose that violates LinkedIn's terms or applicable 
 ├── .gitignore          # keeps .env / secrets and caches out of git
 └── README.md           # this file
 ```
+## 16. HOW TO GET li_at and jsessionID from inspect
+
+ <img width="1078" height="112" alt="image" src="https://github.com/user-attachments/assets/7e39bf07-8eec-4c51-935c-ee451ca55344" />
+
+ 
+
+ navigate to cookies section of this api call you will get your li_at (Authentication_token) and JSESSIONID.
+
+ ## DONT FORGOT TO PUT API_KEY AS <hello> after filling all the values click save tokens and use the service
+```
+```
