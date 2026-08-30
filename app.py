@@ -14,9 +14,9 @@ from typing import Optional
 from bs4 import BeautifulSoup
 from curl_cffi import requests as cffi
 from dotenv import load_dotenv
-from fastapi import FastAPI, Header, HTTPException, Query
+from fastapi import FastAPI, Header, HTTPException, Query, Request
 from pydantic import BaseModel
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 load_dotenv()
 
@@ -28,6 +28,12 @@ MOBILE_UA = ("Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 "
              "(KHTML, like Gecko) Chrome/151.0.0.0 Mobile Safari/537.36")
 
 app = FastAPI(title="LinkedIn Profile API", version="2.0.0")
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    # Never emit a plain-text 500 (which breaks the frontend's JSON parsing).
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
 
 # --------------------------------------------------------------------------- #
@@ -391,6 +397,11 @@ def get_profile(
             raise HTTPException(status_code=401, detail="Invalid or missing API key")
         li_at, jsessionid = LI_AT, JSESSIONID
 
+    # Strip stray whitespace/newlines from a wrapped copy-paste so cookie/header
+    # construction can't break (a raw newline in a cookie makes curl_cffi throw).
+    li_at = re.sub(r"\s+", "", li_at or "")
+    jsessionid = re.sub(r"\s+", "", jsessionid or "")
+
     if not is_linkedin_url(url):
         raise HTTPException(status_code=400, detail="URL must be a linkedin.com profile URL")
     slug = extract_slug(url)
@@ -399,7 +410,13 @@ def get_profile(
     if not li_at or not jsessionid:
         raise HTTPException(status_code=400, detail="No LinkedIn session — set your li_at and JSESSIONID in Settings")
 
-    resp = fetch_mwlite_html(slug, li_at, jsessionid)
+    # An expired/invalid session makes LinkedIn bounce through a redirect loop; curl_cffi
+    # then raises TooManyRedirects. Catch any fetch failure and surface a clean 502 (not a 500).
+    try:
+        resp = fetch_mwlite_html(slug, li_at, jsessionid)
+    except Exception:
+        raise HTTPException(status_code=502,
+                            detail="LinkedIn session expired or blocked — update your li_at / JSESSIONID")
     final = str(resp.url).lower()
     if resp.status_code in (401, 403, 999) or "authwall" in final or "/login" in final:
         raise HTTPException(status_code=502, detail="LinkedIn session expired or blocked — update your li_at token")
